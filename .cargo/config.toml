@@ -1,0 +1,6 @@
+#[env]
+#ANDROID_NDK_HOME = "/home/lis/Android/Sdk/ndk"
+#
+#[target.aarch64-linux-android]
+#linker = "aarch64-linux-android29-clang"
+
