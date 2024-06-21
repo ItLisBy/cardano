@@ -974,6 +974,7 @@ dependencies = [
 [[package]]
 name = "roller"
 version = "0.1.0"
+source = "git+https://github.com/ItLisBy/roller#9d104e408e85888ac69414c253f67b79d0b52b19"
 dependencies = [
  "log",
  "rand",
