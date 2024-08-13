@@ -1,5 +1,7 @@
 mod dice_pool;
 
+use std::env;
+use dotenv::dotenv;
 use roller::FancyDisplay;
 use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, utils::command::BotCommands};
@@ -37,22 +39,19 @@ impl Default for MyConfig {
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
+    dotenv().ok();
     log::info!("Starting command bot...");
 
-    if dotenv::dotenv().is_ok() {
-        let env = dotenv::var("CARDANO_ENVIRONMENT").unwrap();
-        let token = if env == "Development" {
-            dotenv::var("TELOXIDE_TOKEN_TEST")
-        } else {
-            dotenv::var("TELOXIDE_TOKEN")
-        };
-        if token.is_ok() {
-            let bot = Bot::new(token.unwrap());
-
-            Command::repl(bot, answer).await;
-        }
+    let env = env::var("CARDANO_ENVIRONMENT").unwrap();
+    let token = if env == "Development" {
+        env::var("TELOXIDE_TOKEN_TEST")
     } else {
-        panic!("No .env file found!");
+        env::var("TELOXIDE_TOKEN")
+    };
+    if token.is_ok() {
+        let bot = Bot::new(token.unwrap());
+
+        Command::repl(bot, answer).await;
     }
 }
 
@@ -63,6 +62,8 @@ enum Command {
     Help,
     #[command(description = "Roll dices")]
     Roll(String),
+    #[command(description = "Roll dice pool for c7d6 with provided SR (default: 4)")]
+    NCD(String),
     #[command(description = "Fancy output for P")]
     Fancy(String),
     #[command(description = "Roll in value for WH40K")]
@@ -82,7 +83,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     if cfg.success_from == 0 {
                         bot.send_message(msg.chat.id, format!("{r}")).await?
                     } else {
-                        bot.send_message(msg.chat.id, r.to_success_str()).parse_mode(ParseMode::Html).await?
+                        bot.send_message(msg.chat.id, r.to_success_str(cfg.success_from)).parse_mode(ParseMode::Html).await?
                     }
                 }
                 Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
@@ -143,6 +144,26 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 bot.send_message(msg.chat.id, "Unable to set new success rate threshold").await?
             } else {
                 bot.send_message(msg.chat.id, format!("Success rate threshold set to {}", sr)).await?
+            }
+        }
+        Command::NCD(command) => {
+            // Add modifier for successes (SR*2 for example)
+            let cmd_some = command.split_once(':');
+            if cmd_some.is_none() {
+                bot.send_message(msg.chat.id, format!("Error: Invalid expression.")).await?
+            } else {
+                let cmd: (&str, &str) = cmd_some.unwrap();
+                let result = roller::roll_str(cmd.0);
+                match result {
+                    Ok(r) => {
+                        if cfg.success_from == 0 {
+                            bot.send_message(msg.chat.id, format!("{r}")).await?
+                        } else {
+                            bot.send_message(msg.chat.id, r.to_success_str(cmd.1.parse::<u32>().unwrap())).parse_mode(ParseMode::Html).await?
+                        }
+                    }
+                    Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
+                }
             }
         }
     };
