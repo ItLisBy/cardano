@@ -159,7 +159,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         if cfg.success_from == 0 {
                             bot.send_message(msg.chat.id, format!("{r}")).await?
                         } else {
-                            bot.send_message(msg.chat.id, r.to_success_str(cmd.1.parse::<u32>().unwrap_or(4c))).parse_mode(ParseMode::Html).await?
+                            bot.send_message(msg.chat.id, r.to_success_str(cmd.1.parse::<u32>().unwrap_or(4))).parse_mode(ParseMode::Html).await?
                         }
                     }
                     Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
