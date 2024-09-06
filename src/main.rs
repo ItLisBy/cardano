@@ -1,4 +1,4 @@
-mod dice_pool;
+mod displays;
 
 use std::env;
 use dotenv::dotenv;
@@ -6,7 +6,7 @@ use roller::FancyDisplay;
 use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, utils::command::BotCommands};
 use teloxide::types::ParseMode;
-use crate::dice_pool::SuccessDisplay;
+use displays::{noesis_display::NoesisDisplay, nc7d6_display::NC7D6Display};
 
 /*
 4D 61 63 68  69 6E 61 20  44 65 69 20  61 6E 69 6D  61 20 74 65
@@ -159,7 +159,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         if cfg.success_from == 0 {
                             bot.send_message(msg.chat.id, format!("{r}")).await?
                         } else {
-                            bot.send_message(msg.chat.id, r.to_success_str(cmd.1.parse::<u32>().unwrap_or(4))).parse_mode(ParseMode::Html).await?
+                            bot.send_message(msg.chat.id, r.to_ncd_str(cmd.1.parse::<u32>().unwrap_or(4))).parse_mode(ParseMode::Html).await?
                         }
                     }
                     Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
