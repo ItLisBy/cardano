@@ -5,6 +5,7 @@ use dotenv::dotenv;
 use roller::FancyDisplay;
 use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, utils::command::BotCommands};
+use teloxide::dispatching::UpdateHandler;
 use teloxide::types::ParseMode;
 use displays::{noesis_display::NoesisDisplay, nc7d6_display::NC7D6Display};
 
@@ -24,6 +25,8 @@ use displays::{noesis_display::NoesisDisplay, nc7d6_display::NC7D6Display};
     And to make people happier, you need to make good rolls (6 and above).
     Then I will love you as my son and good friend
  */
+
+type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 #[derive(Serialize, Deserialize)]
 struct MyConfig {
@@ -48,11 +51,24 @@ async fn main() {
     } else {
         env::var("TELOXIDE_TOKEN")
     };
-    if token.is_ok() {
-        let bot = Bot::new(token.unwrap());
-
-        Command::repl(bot, answer).await;
+    if token.is_err() {
+        return;
     }
+
+    let bot = Bot::new(token.unwrap());
+
+    Dispatcher::builder(bot, schema())
+        // .dependencies(dptree::deps![parameters])
+        .default_handler(|upd| async move {
+            log::warn!("Unhandled update: {:?}", upd);
+        })
+        .error_handler(LoggingErrorHandler::with_custom_text(
+            "An error has occurred in the dispatcher",
+        ))
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 }
 
 #[derive(BotCommands, Clone)]
@@ -61,44 +77,61 @@ enum Command {
     #[command(description = "Help from Omnissiah")]
     Help,
     #[command(description = "Roll dices")]
-    Roll(String),
+    Roll { expr: String },
     #[command(description = "Roll dice pool for c7d6 with provided SR (default: 4)")]
-    NCD(String),
+    NCD { expr: String },
     #[command(description = "Fancy output for P")]
-    Fancy(String),
+    Fancy { expr: String },
     #[command(description = "Roll in value for WH40K")]
-    WH40(i16),
+    WH40 { value: i16 },
     #[command(description = "Set success rate threshold (0 to disable)")]
-    SetSR(u32),
+    SetSR { sr: u32 },
 }
 
-async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
+fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let handler = teloxide::filter_command::<Command, _>()
+        .branch(
+            dptree::entry()
+                .filter_command::<Command>()
+                .endpoint(commands_handler),
+        );
+
+    Update::filter_message()
+        .branch(handler)
+        .branch(dptree::endpoint(invalid_state))
+}
+
+async fn commands_handler(
+    bot: Bot,
+    msg: Message,
+    cmd: Command,
+) -> HandlerResult {
     let cfg: MyConfig = confy::load("cardano-tg-roll-bot", None).unwrap();
-    match cmd {
-        Command::Help => bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?,
-        Command::Roll(command) => {
-            let result = roller::roll_str(command.as_str());
+    let text = match cmd {
+        Command::Help => { Command::descriptions().to_string() }
+        Command::Roll { expr } => {
+            let result = roller::roll_str(expr.as_str());
             match result {
                 Ok(r) => {
                     if cfg.success_from == 0 {
-                        bot.send_message(msg.chat.id, format!("{r}")).await?
+                        format!("{r}")
                     } else {
-                        bot.send_message(msg.chat.id, r.to_success_str(cfg.success_from)).parse_mode(ParseMode::Html).await?
+                        r.to_success_str(cfg.success_from)
                     }
                 }
-                Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
+                Err(e) => { format!("Error: {e}") }
             }
         }
-        Command::Fancy(command) => {
-            let result = roller::roll_str(command.as_str());
+        Command::Fancy { expr } => {
+            let result = roller::roll_str(expr.as_str());
             match result {
                 Ok(r) => {
-                    bot.send_message(msg.chat.id, r.to_fancy_str()).await?
+                    r.to_fancy_str()
                 }
-                Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
+                Err(e) => { format!("Error: {e}") }
             }
         }
-        Command::WH40(value) => {
+        Command::WH40 { value } => {
             let result = roller::roll_str("d100");
             match result {
                 Ok(r) => {
@@ -131,42 +164,46 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     }
 */
                     // bot.send_message(msg.chat.id, format!("d100 in {}\nSR: {}{}", value, sr, if is_critical { "" } else { "" })).await?
-                    bot.send_message(msg.chat.id, "Not implemented yet.").await?
+                    "Not implemented yet.".to_string()
                 }
-                Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
+                Err(e) => { format!("Error: {e}") }
             }
         }
-        Command::SetSR(sr) => {
+        Command::SetSR { sr } => {
             let store_result = confy::store("cardano-tg-roll-bot",
                                             None,
                                             MyConfig { success_from: sr });
             if store_result.is_err() {
-                bot.send_message(msg.chat.id, "Unable to set new success rate threshold").await?
+                "Unable to set new success rate threshold".to_string()
             } else {
-                bot.send_message(msg.chat.id, format!("Success rate threshold set to {}", sr)).await?
+                format!("Success rate threshold set to {}", sr)
             }
         }
-        Command::NCD(command) => {
+        Command::NCD { expr } => {
             // Add modifier for successes (SR*2 for example)
-            let cmd_some = command.split_once(':');
-            if cmd_some.is_none() {
-                bot.send_message(msg.chat.id, format!("Error: Invalid expression.")).await?
-            } else {
-                let cmd: (&str, &str) = cmd_some.unwrap();
-                let result = roller::roll_str(cmd.0);
-                match result {
-                    Ok(r) => {
-                        if cfg.success_from == 0 {
-                            bot.send_message(msg.chat.id, format!("{r}")).await?
-                        } else {
-                            bot.send_message(msg.chat.id, r.to_ncd_str(cmd.1.parse::<u32>().unwrap_or(4))).parse_mode(ParseMode::Html).await?
-                        }
+            let cmd_some = expr.split_once(':');
+            let cmd: (&str, &str) = cmd_some.unwrap_or((expr.as_str(), "4"));
+            let result = roller::roll_str(cmd.0);
+            match result {
+                Ok(r) => {
+                    if cfg.success_from == 0 {
+                        format!("{r}")
+                    } else {
+                        r.to_ncd_str(cmd.1.parse::<u32>().unwrap_or(4))
                     }
-                    Err(e) => { bot.send_message(msg.chat.id, format!("Error: {e}")).await? }
                 }
+                Err(e) => { format!("Error: {e}") }
             }
         }
     };
 
+    bot.send_message(msg.chat.id, text).parse_mode(ParseMode::Html).await?;
+
+    Ok(())
+}
+
+async fn invalid_state(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(msg.chat.id, "Unable to handle the message. Type /help to see the usage.")
+       .await?;
     Ok(())
 }
