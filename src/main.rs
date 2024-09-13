@@ -135,36 +135,59 @@ async fn commands_handler(
             let result = roller::roll_str("d100");
             match result {
                 Ok(r) => {
-                    /*let mut sr = (value - r.sum as i16) / 10;
+                    let mut sr = (value - r.sum as i16) / 10;
                     let mut modifier = 1;
                     let mut is_success: bool;
                     let mut is_critical: bool = false;
-                    if sr > 0 {
-                        sr += 1i16;
-                        is_success = true;
-                    } else {
-                        sr -= 1i16;
-                        is_success = false;
-                    }
                     match sr {
-                        11 | 22 | 33 | 44 | 55 | 66 | 77 | 88 => sr *= 2i16,
+                        x if x > 0 => {
+                            sr += 1i16;
+                            is_success = true;
+                        }
+                        0 => {
+                            if value < r.sum as i16 {
+                                sr = -1;
+                                is_success = false;
+                            } else {
+                                sr = 1;
+                                is_success = true;
+                            }
+                        }
+                        x if x < 0 => {
+                            // sr -= 1i16;
+                            is_success = false;
+                        }
+                        _ => {}
+                    }
+                    match r.sum {
+                        11 | 22 | 33 | 44 | 55 | 66 | 77 | 88 => {
+                            sr *= 2i16;
+                            is_critical = true;
+                        }
                         1..=5 => {
                             sr *= 2i16;
                             is_success = true;
-                        },
+                            is_critical = true;
+                            sr = sr.checked_abs().unwrap();
+                        }
                         95..=100 => {
                             if value > 100 {
                                 sr = -2;
                             } else {
                                 sr *= 2i16;
+                                sr = sr.checked_neg().unwrap();
                             }
                             is_success = false;
+                            is_critical = true;
                         }
                         _ => {}
                     }
-*/
-                    // bot.send_message(msg.chat.id, format!("d100 in {}\nSR: {}{}", value, sr, if is_critical { "" } else { "" })).await?
-                    "Not implemented yet.".to_string()
+
+                    if is_critical {
+                        format!("d100: {} in {}\n<u>SR: {}</u>", r.sum, value, sr).to_string()
+                    } else {
+                        format!("d100: {} in {}\nSR: {}", r.sum, value, sr).to_string()
+                    }
                 }
                 Err(e) => { format!("Error: {e}") }
             }

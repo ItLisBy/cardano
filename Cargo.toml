@@ -1,6 +1,6 @@
 [package]
 name = "cardano-tg-roll-bot"
-version = "0.1.3"
+version = "0.2.0-b"
 edition = "2021"
 
 [dependencies]
