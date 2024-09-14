@@ -1,13 +1,13 @@
 mod displays;
+mod handlers;
 
 use std::env;
 use dotenv::dotenv;
-use roller::FancyDisplay;
 use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, utils::command::BotCommands};
 use teloxide::dispatching::UpdateHandler;
 use teloxide::types::ParseMode;
-use displays::{noesis_display::NoesisDisplay, nc7d6_display::NC7D6Display};
+use handlers::*;
 
 /*
 4D 61 63 68  69 6E 61 20  44 65 69 20  61 6E 69 6D  61 20 74 65
@@ -28,17 +28,6 @@ use displays::{noesis_display::NoesisDisplay, nc7d6_display::NC7D6Display};
 
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-#[derive(Serialize, Deserialize)]
-struct MyConfig {
-    success_from: u32,
-}
-
-impl Default for MyConfig {
-    fn default() -> Self {
-        Self { success_from: 0 }
-    }
-}
-
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -58,7 +47,6 @@ async fn main() {
     let bot = Bot::new(token.unwrap());
 
     Dispatcher::builder(bot, schema())
-        // .dependencies(dptree::deps![parameters])
         .default_handler(|upd| async move {
             log::warn!("Unhandled update: {:?}", upd);
         })
@@ -69,6 +57,11 @@ async fn main() {
         .build()
         .dispatch()
         .await;
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct MyConfig {
+    success_from: u32,
 }
 
 #[derive(BotCommands, Clone)]
@@ -110,115 +103,12 @@ async fn commands_handler(
 ) -> HandlerResult {
     let cfg: MyConfig = confy::load("cardano-tg-roll-bot", None).unwrap();
     let text = match cmd {
-        Command::Help => { Command::descriptions().to_string() }
-        Command::Roll { expr } => {
-            let result = roller::roll_str(expr.as_str());
-            match result {
-                Ok(r) => {
-                    if cfg.success_from == 0 {
-                        format!("{r}")
-                    } else {
-                        r.to_success_str(cfg.success_from)
-                    }
-                }
-                Err(e) => { format!("Error: {e}") }
-            }
-        }
-        Command::Fancy { expr } => {
-            let result = roller::roll_str(expr.as_str());
-            match result {
-                Ok(r) => {
-                    r.to_fancy_str()
-                }
-                Err(e) => { format!("Error: {e}") }
-            }
-        }
-        Command::WH40 { value } => {
-            let result = roller::roll_str("d100");
-            match result {
-                Ok(r) => {
-                    let mut sr = (value - r.sum as i16) / 10;
-                    let mut _is_success: bool;
-                    let mut is_critical: bool = false;
-                    match sr {
-                        x if x > 0 => {
-                            sr += 1i16;
-                            _is_success = true;
-                        }
-                        0 => {
-                            if value < r.sum as i16 {
-                                sr = -1;
-                                _is_success = false;
-                            } else {
-                                sr = 1;
-                                _is_success = true;
-                            }
-                        }
-                        x if x < 0 => {
-                            // sr -= 1i16;
-                            _is_success = false;
-                        }
-                        _ => {}
-                    }
-                    match r.sum {
-                        11 | 22 | 33 | 44 | 55 | 66 | 77 | 88 => {
-                            sr *= 2i16;
-                            is_critical = true;
-                        }
-                        1..=5 => {
-                            sr *= 2i16;
-                            _is_success = true;
-                            is_critical = true;
-                            sr = sr.checked_abs().unwrap();
-                        }
-                        95..=100 => {
-                            if value > 100 {
-                                sr = -2;
-                            } else {
-                                sr *= 2i16;
-                                sr = sr.checked_neg().unwrap();
-                            }
-                            _is_success = false;
-                            is_critical = true;
-                        }
-                        _ => {}
-                    }
-
-                    if is_critical {
-                        format!("d100: {} in {}\n<u>SR: {}</u>", r.sum, value, sr).to_string()
-                    } else {
-                        format!("d100: {} in {}\nSR: {}", r.sum, value, sr).to_string()
-                    }
-                }
-                Err(e) => { format!("Error: {e}") }
-            }
-        }
-        Command::SetSR { sr } => {
-            let store_result = confy::store("cardano-tg-roll-bot",
-                                            None,
-                                            MyConfig { success_from: sr });
-            if store_result.is_err() {
-                "Unable to set new success rate threshold".to_string()
-            } else {
-                format!("Success rate threshold set to {}", sr)
-            }
-        }
-        Command::NCD { expr } => {
-            // Add modifier for successes (SR*2 for example)
-            let cmd_some = expr.split_once(':');
-            let cmd: (&str, &str) = cmd_some.unwrap_or((expr.as_str(), "4"));
-            let result = roller::roll_str(cmd.0);
-            match result {
-                Ok(r) => {
-                    if cfg.success_from == 0 {
-                        format!("{r}")
-                    } else {
-                        r.to_ncd_str(cmd.1.parse::<u32>().unwrap_or(4))
-                    }
-                }
-                Err(e) => { format!("Error: {e}") }
-            }
-        }
+        Command::Help => Command::descriptions().to_string(),
+        Command::Roll { expr } => roll_handler(expr, cfg),
+        Command::Fancy { expr } => fancy_handler(expr),
+        Command::WH40 { value } => wh40k_handler(value),
+        Command::SetSR { sr } => set_sr_handler(sr),
+        Command::NCD { expr } => ncd_handler(expr)
     };
 
     bot.send_message(msg.chat.id, text).parse_mode(ParseMode::Html).await?;
