@@ -138,26 +138,25 @@ async fn commands_handler(
             match result {
                 Ok(r) => {
                     let mut sr = (value - r.sum as i16) / 10;
-                    let mut modifier = 1;
-                    let mut is_success: bool;
+                    let mut _is_success: bool;
                     let mut is_critical: bool = false;
                     match sr {
                         x if x > 0 => {
                             sr += 1i16;
-                            is_success = true;
+                            _is_success = true;
                         }
                         0 => {
                             if value < r.sum as i16 {
                                 sr = -1;
-                                is_success = false;
+                                _is_success = false;
                             } else {
                                 sr = 1;
-                                is_success = true;
+                                _is_success = true;
                             }
                         }
                         x if x < 0 => {
                             // sr -= 1i16;
-                            is_success = false;
+                            _is_success = false;
                         }
                         _ => {}
                     }
@@ -168,7 +167,7 @@ async fn commands_handler(
                         }
                         1..=5 => {
                             sr *= 2i16;
-                            is_success = true;
+                            _is_success = true;
                             is_critical = true;
                             sr = sr.checked_abs().unwrap();
                         }
@@ -179,7 +178,7 @@ async fn commands_handler(
                                 sr *= 2i16;
                                 sr = sr.checked_neg().unwrap();
                             }
-                            is_success = false;
+                            _is_success = false;
                             is_critical = true;
                         }
                         _ => {}
