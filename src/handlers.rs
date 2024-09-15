@@ -1,3 +1,4 @@
+use std::ops::Neg;
 use crate::displays::fancy_display::FancyDisplay;
 use crate::displays::nc7d6_display::NC7D6Display;
 use crate::displays::noesis_display::NoesisDisplay;
@@ -32,25 +33,25 @@ pub fn wh40k_handler(value: i16) -> String {
     match result {
         Ok(r) => {
             let mut sr = (value - r.sum as i16) / 10;
-            let mut _is_success: bool;
+            let mut is_success: bool = true;
             let mut is_critical: bool = false;
             match sr {
                 x if x > 0 => {
                     sr += 1i16;
-                    _is_success = true;
+                    is_success = true;
                 }
                 0 => {
                     if value < r.sum as i16 {
                         sr = -1;
-                        _is_success = false;
+                        is_success = false;
                     } else {
                         sr = 1;
-                        _is_success = true;
+                        is_success = true;
                     }
                 }
                 x if x < 0 => {
                     // sr -= 1i16;
-                    _is_success = false;
+                    is_success = false;
                 }
                 _ => {}
             }
@@ -61,23 +62,26 @@ pub fn wh40k_handler(value: i16) -> String {
                 }
                 1..=5 => {
                     sr *= 2i16;
-                    _is_success = true;
+                    is_success = true;
                     is_critical = true;
-                    sr = sr.checked_abs().unwrap();
                 }
                 95..=100 => {
                     if value > 100 {
                         sr = -2;
                     } else {
                         sr *= 2i16;
-                        sr = sr.checked_neg().unwrap();
                     }
-                    _is_success = false;
+                    is_success = false;
                     is_critical = true;
                 }
                 _ => {}
             }
 
+            sr = sr.checked_abs().unwrap();
+            if !is_success {
+                sr = sr.checked_neg().unwrap();
+            }
+            
             if is_critical {
                 format!("d100: {} in {}\n<u>SR: {}</u>", r.sum, value, sr).to_string()
             } else {
