@@ -1,4 +1,6 @@
+use std::fmt::format;
 use std::ops::Neg;
+use regex::Regex;
 use crate::displays::fancy_display::FancyDisplay;
 use crate::displays::nc7d6_display::NC7D6Display;
 use crate::displays::noesis_display::NoesisDisplay;
@@ -81,7 +83,7 @@ pub fn wh40k_handler(value: i16) -> String {
             if !is_success {
                 sr = sr.checked_neg().unwrap();
             }
-            
+
             if is_critical {
                 format!("d100: {} in {}\n<u>SR: {}</u>", r.sum, value, sr).to_string()
             } else {
@@ -104,13 +106,17 @@ pub fn set_sr_handler(sr: u32) -> String {
 }
 
 pub fn ncd_handler(expr: String) -> String {
-    // Add modifier for successes (SR*2 for example)
-    let cmd_some = expr.split_once(':');
-    let cmd: (&str, &str) = cmd_some.unwrap_or((expr.as_str(), "4"));
-    let result = roller::roll_str(cmd.0);
+    let re1 = Regex::new(r"(?<num>\d*)d(?<dice>\d+)(:(?<sr>\d+))?(?<mods>.*)").unwrap();
+    let cmd = re1.captures(expr.as_str()).unwrap();
+    let clear_expr = format!("{}d{}{}", cmd.name("num").unwrap().as_str(), cmd.name("dice").unwrap().as_str(), cmd.name("mods").unwrap().as_str());
+    let result = roller::roll_str(clear_expr.as_str());
     match result {
         Ok(r) => {
-            r.to_ncd_str(cmd.1.parse::<u32>().unwrap_or(4))
+            let sr = match cmd.name("sr") {
+                Some(x) => x.as_str().parse::<u32>().unwrap(),
+                None => (cmd.name("dice").unwrap().as_str().parse::<u32>().unwrap() / 2) + 1u32,
+            };
+            r.to_ncd_str(sr)
         }
         Err(e) => { format!("Error: {e}") }
     }
