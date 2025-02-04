@@ -88,12 +88,12 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
                 .filter_command::<Command>()
                 .endpoint(commands_handler),
         );
-    
+
     // handler
 
     Update::filter_message()
         .branch(handler)
-        // .branch(dptree::endpoint(invalid_state))
+    // .branch(dptree::endpoint(invalid_state))
 }
 
 async fn commands_handler(
