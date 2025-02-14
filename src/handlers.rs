@@ -1,6 +1,6 @@
 use std::fmt::format;
 use std::ops::Neg;
-use regex::Regex;
+use regex::{Match, Regex};
 use crate::displays::fancy_display::FancyDisplay;
 use crate::displays::nc7d6_display::NC7D6Display;
 use crate::displays::noesis_display::NoesisDisplay;
@@ -10,11 +10,7 @@ pub fn roll_handler(expr: String, cfg: MyConfig) -> String {
     let result = roller::roll_str(expr.as_str());
     match result {
         Ok(r) => {
-            if cfg.success_from == 0 {
-                format!("{r}")
-            } else {
-                r.to_success_str(cfg.success_from)
-            }
+            format!("{r}")
         }
         Err(e) => { format!("Error: {e}") }
     }
@@ -30,20 +26,43 @@ pub fn fancy_handler(expr: String) -> String {
     }
 }
 
-pub fn wh40k_handler(value: i16) -> String {
+pub fn dh_handler(expr: String) -> String {
     let result = roller::roll_str("d100");
     match result {
         Ok(r) => {
-            let mut sr = (value - r.sum as i16) / 10;
+            let re1 = Regex::new(r"(?<value>\d+)(?<adv>[aAdD]?)$").unwrap();
+            let value_parsed = re1.captures(&expr).unwrap();
+
+            let mut result_value = r.sum as i16;
+            match value_parsed.name("adv") {
+                None => {}
+                Some(adv) => {
+                    let swapped = swap_digits(result_value);
+                    if ((adv.as_str() == "d" || adv.as_str() == "D") && swapped > result_value)
+                        || ((adv.as_str() == "a" || adv.as_str() == "A") && swapped < result_value) {
+                        result_value = swapped;
+                    }
+                }
+            }
+
+            let value: i16 = match value_parsed.name("value") {
+                None => {
+                    1i16
+                }
+                Some(num) => {
+                    num.as_str().parse::<i16>().unwrap()
+                }
+            };
+            let mut sr = (value - result_value) / 10;
             let mut is_success: bool = true;
             let mut is_critical: bool = false;
             match sr {
                 x if x > 0 => {
-                    sr += 1i16;
+                    sr += 1;
                     is_success = true;
                 }
                 0 => {
-                    if value < r.sum as i16 {
+                    if value < result_value {
                         sr = -1;
                         is_success = false;
                     } else {
@@ -52,12 +71,11 @@ pub fn wh40k_handler(value: i16) -> String {
                     }
                 }
                 x if x < 0 => {
-                    // sr -= 1i16;
                     is_success = false;
                 }
                 _ => {}
             }
-            match r.sum {
+            match result_value {
                 11 | 22 | 33 | 44 | 55 | 66 | 77 | 88 => {
                     sr *= 2i16;
                     is_critical = true;
@@ -85,16 +103,101 @@ pub fn wh40k_handler(value: i16) -> String {
             }
 
             if is_critical {
-                format!("d100: {} in {}\n<u>SR: {}</u>", r.sum, value, sr).to_string()
+                format!("d100: {} in {}\n<u>SR: {}</u>", result_value, expr, sr).to_string()
             } else {
-                format!("d100: {} in {}\nSR: {}", r.sum, value, sr).to_string()
+                format!("d100: {} in {}\nSR: {}", result_value, expr, sr).to_string()
             }
         }
         Err(e) => { format!("Error: {e}") }
     }
 }
 
-pub fn set_sr_handler(sr: u32) -> String {
+pub fn im_handler(expr: String) -> String {
+    let result = roller::roll_str("d100");
+    match result {
+        Ok(r) => {
+            let re1 = Regex::new(r"(?<value>\d+)(?<adv>[aAdD]?)$").unwrap();
+            let value_parsed = re1.captures(&expr).unwrap();
+
+            let mut result_value = r.sum as i16;
+            match value_parsed.name("adv") {
+                None => {}
+                Some(adv) => {
+                    let swapped = swap_digits(result_value);
+                    if ((adv.as_str() == "d" || adv.as_str() == "D") && swapped > result_value)
+                        || ((adv.as_str() == "a" || adv.as_str() == "A") && swapped < result_value) {
+                        result_value = swapped;
+                    }
+                }
+            }
+
+            let value: i16 = match value_parsed.name("value") {
+                None => {
+                    1i16
+                }
+                Some(num) => {
+                    num.as_str().parse::<i16>().unwrap()
+                }
+            };
+            let mut sr = (value - result_value) / 10;
+            let mut is_success: bool = true;
+            let mut is_critical: bool = false;
+            match sr {
+                x if x > 0 => {
+                    is_success = true;
+                }
+                0 => {
+                    if value < result_value {
+                        sr = -1;
+                        is_success = false;
+                    } else {
+                        sr = 1;
+                        is_success = true;
+                    }
+                }
+                x if x < 0 => {
+                    is_success = false;
+                }
+                _ => {}
+            }
+            match result_value {
+                11 | 22 | 33 | 44 | 55 | 66 | 77 | 88 => {
+                    sr *= 2i16;
+                    is_critical = true;
+                }
+                1..=5 => {
+                    sr *= 2i16;
+                    is_success = true;
+                    is_critical = true;
+                }
+                95..=100 => {
+                    if value > 100 {
+                        sr = -2;
+                    } else {
+                        sr *= 2i16;
+                    }
+                    is_success = false;
+                    is_critical = true;
+                }
+                _ => {}
+            }
+
+            sr = sr.checked_abs().unwrap();
+            if !is_success {
+                sr = sr.checked_neg().unwrap();
+            }
+
+            if is_critical {
+                format!("d100: {} in {}\n<u>SR: {}</u>", result_value, expr, sr).to_string()
+            } else {
+                format!("d100: {} in {}\nSR: {}", result_value, expr, sr).to_string()
+            }
+        }
+        Err(e) => { format!("Error: {e}") }
+    }
+}
+
+fn set_sr_handler(sr: u32) -> String {
     let store_result = confy::store("cardano-tg-roll-bot",
                                     None,
                                     MyConfig { success_from: sr });
@@ -120,4 +223,13 @@ pub fn ncd_handler(expr: String) -> String {
         }
         Err(e) => { format!("Error: {e}") }
     }
+}
+
+fn swap_digits(n: i16) -> i16 {
+    if n == 100 {
+        return 1;
+    }
+    let tens = n / 10;
+    let ones = n % 10;
+    ones * 10 + tens
 }

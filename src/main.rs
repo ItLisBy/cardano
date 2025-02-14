@@ -73,12 +73,12 @@ enum Command {
     Roll { expr: String },
     #[command(description = "Roll dice pool for c7d6 with provided SR (default: 4)")]
     NCD { expr: String },
+    #[command(description = "Roll d100 in value for Imperium Maledictum")]
+    IM { value: String },
+    #[command(description = "Roll d100 in value for Dark Heresy, etc.")]
+    DH { value: String },
     #[command(description = "Fancy output for P")]
     Fancy { expr: String },
-    #[command(description = "Roll in value for WH40K")]
-    WH40 { value: i16 },
-    #[command(description = "Set success rate threshold (0 to disable)")]
-    SetSR { sr: u32 },
 }
 
 fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -106,8 +106,8 @@ async fn commands_handler(
         Command::Help => Command::descriptions().to_string(),
         Command::Roll { expr } => roll_handler(expr, cfg),
         Command::Fancy { expr } => fancy_handler(expr),
-        Command::WH40 { value } => wh40k_handler(value),
-        Command::SetSR { sr } => set_sr_handler(sr),
+        Command::IM { value } => im_handler(value),
+        Command::DH { value } => dh_handler(value),
         Command::NCD { expr } => ncd_handler(expr)
     };
 
