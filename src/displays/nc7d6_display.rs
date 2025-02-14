@@ -35,7 +35,7 @@ impl NC7D6Display for RollResult {
             }
         }
         s.push_str(format!("{}", self.sum).as_str());
-        if self.number > 8u16 {
+        if self.number > 4u16 {
             s.push_str(format!("\n____\nSuccesses: {}", success_rate).as_str());
         }
         s
